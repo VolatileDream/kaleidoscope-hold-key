@@ -11,6 +11,21 @@ This can be used to:
  * Hold down W to walk forward
  * Hold down Backspace to delete a document
 
+# Setup
+
+You'll need to patch `Kaleidoscope-Ranges.h` to add the following into the enum:
+
+```
+enum : uint16_t {
+
+  ...
+  TURBO,
++  HOLDKEY,
+  ...
+
+}
+```
+
 ---
 
 # Example
