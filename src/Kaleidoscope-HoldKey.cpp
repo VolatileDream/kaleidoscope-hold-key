@@ -40,7 +40,7 @@ EventHandlerResult HoldKey_::onKeyswitchEvent(Key &mapped_key, KeyAddr addr, uin
   return EventHandlerResult::OK;
 }
 
-// returns false if more than HOLDKEY_COUNT keys were held.
+// returns false if more than HOLDKEY_COUNT keys were held, or zero keys were held.
 static bool update_held_keys(Key held[HOLDKEY_COUNT]) {
   reset_array(held);
   // Setup the array.
@@ -62,7 +62,7 @@ static bool update_held_keys(Key held[HOLDKEY_COUNT]) {
     // Array was updated as we went, clear it because too many keys were held.
     reset_array(held);
   }
-  return held_count <= HOLDKEY_COUNT;
+  return 0 < held_count && held_count <= HOLDKEY_COUNT;
 }
 
 static void update_keys(Key held[HOLDKEY_COUNT], bool holding) {
