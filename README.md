@@ -1,15 +1,15 @@
 # Kaleidoscope-HoldKey
 
-This is a plugin for [Kaleidoscope][fw]. It allows users to hold _one_ specific
-key (already on their keyboard) until another key is pressed. It adds a single
-special key to start listening, and then records the next key press which it
-continues to hold down until another key is pressed. It ignores layer changes.
+This is a plugin for [Kaleidoscope][fw]. It allows users to hold up to 6 keys
+(already on their keyboard) until another key is pressed. It adds a single
+special key which records all pressed keys, which it continues to hold for the
+user until another key is pressed. It ignores layer changing key presses.
 
 This can be used to:
 
  * Hold down Shift to open grub on boot
- * Hold down W to walk forward
  * Hold down Backspace to delete a document
+ * Hold down W+A to walk forward and to the left
 
 # Setup
 
