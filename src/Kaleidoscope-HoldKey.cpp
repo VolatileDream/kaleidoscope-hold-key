@@ -23,12 +23,13 @@ static void reset_array(Key held[HOLDKEY_COUNT]) {
   }
 }
 
-HoldKey_::HoldKey_() : state(WAITING) {
+HoldKey_::HoldKey_() : state(WAITING), fail_start_(0) {
   reset_array(hold_);
 }
 
 EventHandlerResult HoldKey_::onKeyswitchEvent(Key &mapped_key, KeyAddr addr, uint8_t key_state) {
-  if (mapped_key == Key_HoldKey && state == WAITING) {
+  if (mapped_key == Key_HoldKey && (state == WAITING || state == HOLD_FAILED)) {
+    special_key_ = addr;
     // Start listening if the key is being released.
     if (keyToggledOff(key_state)) { state = LISTENING; }
   } else if (state == HOLDING && holdableKey(mapped_key) && keyToggledOn(key_state)) {
@@ -52,8 +53,9 @@ static bool update_held_keys(Key held[HOLDKEY_COUNT]) {
 
       if (held_count < HOLDKEY_COUNT) {
         // Update the array if we aren't holding too many keys.
-        held[held_count++] = Layer.lookupOnActiveLayer(addr);
+        held[held_count] = Layer.lookupOnActiveLayer(addr);
       }
+      held_count++;
     }
   }
   if (held_count > HOLDKEY_COUNT) {
@@ -84,6 +86,7 @@ EventHandlerResult HoldKey_::afterEachCycle() {
    case LISTENING:
     if (!update_held_keys(hold_)) {
       state = HOLD_FAILED;
+      fail_start_ = Runtime.millisAtCycleStart();
     } else {
       state = HOLDING;
     }
@@ -93,9 +96,18 @@ EventHandlerResult HoldKey_::afterEachCycle() {
     // fallthrough.
    case HOLDING:
     update_keys(hold_, state == HOLDING);
+    if (state == HOLDING) {
+      ::LEDControl.setCrgbAt(special_key_, breath_compute(85));
+    } else {
+      ::LEDControl.refreshAt(special_key_);
+    }
     break;
    case HOLD_FAILED:
-    state = WAITING;
+    if (!Runtime.hasTimeExpired(fail_start_, HOLD_FAIL_TIMEOUT_MILLIS)) {
+      ::LEDControl.setCrgbAt(special_key_, breath_compute(0));
+    } else {
+      ::LEDControl.refreshAt(special_key_);
+    }
     break;
   }
   return EventHandlerResult::OK;

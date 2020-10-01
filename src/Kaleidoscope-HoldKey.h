@@ -14,6 +14,8 @@
 // Note: Recompile the plugin itself if you update this value!!
 #define HOLDKEY_COUNT 6
 
+#define HOLD_FAIL_TIMEOUT_MILLIS 3000
+
 namespace kaleidoscope {
 namespace plugin {
 
@@ -47,8 +49,10 @@ class HoldKey_ : public kaleidoscope::Plugin {
   EventHandlerResult afterEachCycle();
 
  private:
-  HoldKeyState state = WAITING;
+  HoldKeyState state;
   Key hold_[HOLDKEY_COUNT];
+  KeyAddr special_key_; // only valid after a transition from WAITING to LISTENING.
+  uint32_t fail_start_;
 };
 
 }
