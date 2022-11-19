@@ -70,7 +70,7 @@ static void update_keys(Key held[HOLDKEY_COUNT], bool holding) {
     Key k = held[i];
     if (k != Key_NoKey) {
       if (holding) {
-        Runtime.hid().keyboard().pressKey(k, false);
+        Runtime.hid().keyboard().pressKey(k);
       } else {
         Runtime.hid().keyboard().releaseKey(k);
       }
