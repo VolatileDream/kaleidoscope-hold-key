@@ -45,7 +45,7 @@ class HoldKey_ : public kaleidoscope::Plugin {
 
   static bool holdableKey(Key mapped_key);
 
-  EventHandlerResult onKeyswitchEvent(Key& mapped_key, KeyAddr addr, uint8_t key_state);
+  EventHandlerResult onKeyswitchEvent(KeyEvent &event);
   EventHandlerResult afterEachCycle();
 
  private:

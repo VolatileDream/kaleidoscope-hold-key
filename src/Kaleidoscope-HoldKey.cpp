@@ -27,12 +27,12 @@ HoldKey_::HoldKey_() : state(WAITING), fail_start_(0) {
   reset_array(hold_);
 }
 
-EventHandlerResult HoldKey_::onKeyswitchEvent(Key &mapped_key, KeyAddr addr, uint8_t key_state) {
-  if (mapped_key == Key_HoldKey && (state == WAITING || state == HOLD_FAILED)) {
-    special_key_ = addr;
+EventHandlerResult HoldKey_::onKeyswitchEvent(KeyEvent &event) {
+  if (event.key == Key_HoldKey && (state == WAITING || state == HOLD_FAILED)) {
+    special_key_ = event.addr;
     // Start listening if the key is being released.
-    if (keyToggledOff(key_state)) { state = LISTENING; }
-  } else if (state == HOLDING && holdableKey(mapped_key) && keyToggledOn(key_state)) {
+    if (keyToggledOff(event.state)) { state = LISTENING; }
+  } else if (state == HOLDING && holdableKey(event.key) && keyToggledOn(event.state)) {
     // Something got pressed, stop holding.
     state = WAS_HOLDING;
   }
