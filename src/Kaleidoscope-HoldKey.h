@@ -7,7 +7,7 @@
 //
 // You need to create `kaleidoscope::ranges::HOLDKEY` in order to use
 // this plugin.
-#define Key_HoldKey Key{kaleidoscope::ranges::HOLDKEY}
+constexpr Key Key_HoldKey = Key{kaleidoscope::ranges::HOLDKEY};
 
 // The maximum number of keys that can be held simultaneously.
 //
@@ -20,7 +20,7 @@ namespace kaleidoscope {
 namespace plugin {
 
 // State of the plugin. Used to listen for the next key press.
-// Most event transitions take place in `onKeyswitchEvent`,
+// Most event transitions take place in `onKeyEvent`,
 // WAS_HOLDING -> WAITING happens in `afterEachCycle`.
 enum HoldKeyState {
   WAITING,
@@ -45,7 +45,8 @@ class HoldKey_ : public kaleidoscope::Plugin {
 
   static bool holdableKey(Key mapped_key);
 
-  EventHandlerResult onKeyswitchEvent(KeyEvent &event);
+  EventHandlerResult onKeyEvent(KeyEvent &event);
+  EventHandlerResult beforeReportingState(const KeyEvent &event);
   EventHandlerResult afterEachCycle();
 
  private:

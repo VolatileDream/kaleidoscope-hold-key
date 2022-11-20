@@ -27,7 +27,7 @@ HoldKey_::HoldKey_() : state(WAITING), fail_start_(0) {
   reset_array(hold_);
 }
 
-EventHandlerResult HoldKey_::onKeyswitchEvent(KeyEvent &event) {
+EventHandlerResult HoldKey_::onKeyEvent(KeyEvent &event) {
   if (event.key == Key_HoldKey && (state == WAITING || state == HOLD_FAILED)) {
     special_key_ = event.addr;
     // Start listening if the key is being released.
@@ -43,13 +43,22 @@ EventHandlerResult HoldKey_::onKeyswitchEvent(KeyEvent &event) {
 // returns false if more than HOLDKEY_COUNT keys were held, or zero keys were held.
 static bool update_held_keys(Key held[HOLDKEY_COUNT]) {
   reset_array(held);
+
+  auto device = Kaleidoscope.device();
+
+  // The device provides this function for convenience, optimize this case.
+  const uint8_t device_held = device.pressedKeyswitchCount();
+  if (device_held == 0 || device_held > HOLDKEY_COUNT) {
+    return false;
+  }
+
   // Setup the array.
   uint8_t held_count = 0;
-  for (uint8_t r = 0; r < Kaleidoscope.device().matrix_rows; r++) {
-    for (uint8_t c = 0; c < Kaleidoscope.device().matrix_columns; c++) {
+  for (uint8_t r = 0; r < device.matrix_rows; r++) {
+    for (uint8_t c = 0; c < device.matrix_columns; c++) {
       KeyAddr addr = KeyAddr(r, c);
 
-      if (!Kaleidoscope.device().isKeyswitchPressed(addr)) continue;
+      if (!device.isKeyswitchPressed(addr)) continue;
 
       if (held_count < HOLDKEY_COUNT) {
         // Update the array if we aren't holding too many keys.
@@ -70,12 +79,20 @@ static void update_keys(Key held[HOLDKEY_COUNT], bool holding) {
     Key k = held[i];
     if (k != Key_NoKey) {
       if (holding) {
+        //Runtime.addToReport(k);
         Runtime.hid().keyboard().pressKey(k);
       } else {
         Runtime.hid().keyboard().releaseKey(k);
       }
     }
   }
+}
+
+EventHandlerResult HoldKey_::beforeReportingState(const KeyEvent &event) {
+  if (state == HOLDING || state == WAS_HOLDING) {
+    update_keys(hold_, state == HOLDING);
+  }
+  return EventHandlerResult::OK;
 }
 
 EventHandlerResult HoldKey_::afterEachCycle() {
@@ -93,9 +110,7 @@ EventHandlerResult HoldKey_::afterEachCycle() {
     break;
    case WAS_HOLDING:
     state = WAITING;
-    // fallthrough.
    case HOLDING:
-    update_keys(hold_, state == HOLDING);
     if (state == HOLDING) {
       ::LEDControl.setCrgbAt(special_key_, breath_compute(85));
     } else {
