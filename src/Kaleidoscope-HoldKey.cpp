@@ -17,81 +17,74 @@ __attribute__((weak)) bool HoldKey_::holdableKey(Key mapped_key) {
   //*/
 }
 
-static void reset_array(Key held[HOLDKEY_COUNT]) {
-  for (uint8_t i = 0; i < HOLDKEY_COUNT; i++) {
-    held[i] = Key_NoKey;
+bool HoldKey_::addHeldKey(const KeyEvent &k) {
+  if (held_ >= HOLDKEY_COUNT) {
+    return false;
   }
+  hold_[held_] = k;
+  held_++;
+  return true;
 }
 
-HoldKey_::HoldKey_() : state(WAITING), fail_start_(0) {
-  reset_array(hold_);
+void HoldKey_::releaseHeldKeys() {
+  for (uint8_t i = 0; i < held_; i++) {
+    Kaleidoscope.handleKeyEvent(hold_[i]);
+  }
+  held_ = 0;
 }
 
 EventHandlerResult HoldKey_::onKeyEvent(KeyEvent &event) {
-  if (event.key == Key_HoldKey && (state == WAITING || state == HOLD_FAILED)) {
-    special_key_ = event.addr;
-    // Start listening if the key is being released.
-    if (keyToggledOff(event.state)) { state = LISTENING; }
-  } else if (state == HOLDING && holdableKey(event.key) && keyToggledOn(event.state)) {
-    // Something got pressed, stop holding.
-    state = WAS_HOLDING;
-  }
+  // When the HOLD key is pressed, we do nothing. Only when it is released do
+  // we start tracking key events:
+  //  * any release event gets swallowed, the released key is recorded.
+  //  * any key press causes us to bail.
 
-  return EventHandlerResult::OK;
-}
-
-// returns false if more than HOLDKEY_COUNT keys were held, or zero keys were held.
-static bool update_held_keys(Key held[HOLDKEY_COUNT]) {
-  reset_array(held);
-
-  auto device = Kaleidoscope.device();
-
-  // The device provides this function for convenience, optimize this case.
-  const uint8_t device_held = device.pressedKeyswitchCount();
-  if (device_held == 0 || device_held > HOLDKEY_COUNT) {
-    return false;
-  }
-
-  // Setup the array.
-  uint8_t held_count = 0;
-  for (uint8_t r = 0; r < device.matrix_rows; r++) {
-    for (uint8_t c = 0; c < device.matrix_columns; c++) {
-      KeyAddr addr = KeyAddr(r, c);
-
-      if (!device.isKeyswitchPressed(addr)) continue;
-
-      if (held_count < HOLDKEY_COUNT) {
-        // Update the array if we aren't holding too many keys.
-        held[held_count] = Layer.lookupOnActiveLayer(addr);
-      }
-      held_count++;
-    }
-  }
-  if (held_count > HOLDKEY_COUNT) {
-    // Array was updated as we went, clear it because too many keys were held.
-    reset_array(held);
-  }
-  return 0 < held_count && held_count <= HOLDKEY_COUNT;
-}
-
-static void update_keys(Key held[HOLDKEY_COUNT], bool holding) {
-  for (uint8_t i = 0; i < HOLDKEY_COUNT; i++) {
-    Key k = held[i];
-    if (k != Key_NoKey) {
-      if (holding) {
-        //Runtime.addToReport(k);
-        Runtime.hid().keyboard().pressKey(k);
+  if (state == HOLDING && holdableKey(event.key)) {
+    if (keyToggledOff(event.state)) {
+      if (addHeldKey(event)) {
+        // We're attempting to delay the key release until the user presses
+        // more keys at some later point in time, ergo: ABORT.
+        return EventHandlerResult::ABORT;
       } else {
-        Runtime.hid().keyboard().releaseKey(k);
+        // When we fail to handle the hold (ie: too many keys held)
+        // release all keys and signal that the hold failed.
+        state = HOLD_FAILED;
+        fail_start_ = Runtime.millisAtCycleStart();
+        releaseHeldKeys();
       }
+    } else if (keyToggledOn(event.state)) {
+      state = WAS_HOLDING;
+      releaseHeldKeys();
     }
-  }
-}
+    // Events for keys staying held are ignored.
 
-EventHandlerResult HoldKey_::beforeReportingState(const KeyEvent &event) {
-  if (state == HOLDING || state == WAS_HOLDING) {
-    update_keys(hold_, state == HOLDING);
+  // When not holding down keys that are released, the only key press that we
+  // have any interest in is our special Key_HoldKey.
+  } else if (event.key == Key_HoldKey) {
+    // Record the key address to light it up later.
+    special_key_ = event.addr;
+    // No event is received when there are no keys to hold down, but we still
+    // want to switch to HOLD_FAILED in that case: so we query the device for
+    // how many keys are being held down, but we don't (yet) need to know what
+    // they are.
+    //
+    // Toggle On events are safely ignored.
+    if (keyToggledOff(event.state)) {
+      if (Kaleidoscope.device().pressedKeyswitchCount() > 0) {
+        state = HOLDING;
+      } else {
+        state = HOLD_FAILED;
+        fail_start_ = Runtime.millisAtCycleStart();
+      }
+    } else if (state == HOLDING) {
+      // This key also counts for interrupting the HOLDING state.
+      state = WAS_HOLDING;
+      releaseHeldKeys();
+    }
+    // This is our key, now it's been handled.
+    return EventHandlerResult::OK;
   }
+
   return EventHandlerResult::OK;
 }
 
@@ -100,28 +93,21 @@ EventHandlerResult HoldKey_::afterEachCycle() {
    default:
    case WAITING:
     break;
-   case LISTENING:
-    if (!update_held_keys(hold_)) {
-      state = HOLD_FAILED;
-      fail_start_ = Runtime.millisAtCycleStart();
-    } else {
-      state = HOLDING;
-    }
-    break;
    case WAS_HOLDING:
     state = WAITING;
+    ::LEDControl.refreshAt(special_key_);
+    break;
    case HOLDING:
-    if (state == HOLDING) {
-      ::LEDControl.setCrgbAt(special_key_, breath_compute(85));
-    } else {
-      ::LEDControl.refreshAt(special_key_);
-    }
+    ::LEDControl.setCrgbAt(special_key_, breath_compute(85));
     break;
    case HOLD_FAILED:
-    if (!Runtime.hasTimeExpired(fail_start_, HOLD_FAIL_TIMEOUT_MILLIS)) {
-      ::LEDControl.setCrgbAt(special_key_, breath_compute(0));
-    } else {
+    // This state expires eventually.
+    if (Runtime.hasTimeExpired(fail_start_, HOLD_FAIL_TIMEOUT_MILLIS)) {
       ::LEDControl.refreshAt(special_key_);
+      state = WAITING;
+    } else {
+      // Until the state expires, breath the HOLD key.
+      ::LEDControl.setCrgbAt(special_key_, breath_compute(0));
     }
     break;
   }

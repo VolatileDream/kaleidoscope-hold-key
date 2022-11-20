@@ -3,6 +3,8 @@
 #include "Kaleidoscope.h"
 #include "Kaleidoscope-Ranges.h"
 
+#include "kaleidoscope/KeyEventTracker.h"
+
 // Required in order to add the key to the keymap.
 //
 // You need to create `kaleidoscope::ranges::HOLDKEY` in order to use
@@ -19,12 +21,9 @@ constexpr Key Key_HoldKey = Key{kaleidoscope::ranges::HOLDKEY};
 namespace kaleidoscope {
 namespace plugin {
 
-// State of the plugin. Used to listen for the next key press.
-// Most event transitions take place in `onKeyEvent`,
-// WAS_HOLDING -> WAITING happens in `afterEachCycle`.
+// State of the plugin.
 enum HoldKeyState {
   WAITING,
-  LISTENING,
   HOLDING,
   WAS_HOLDING,
   HOLD_FAILED,
@@ -41,19 +40,25 @@ enum HoldKeyState {
 //
 class HoldKey_ : public kaleidoscope::Plugin {
  public:
-  HoldKey_(void);
-
   static bool holdableKey(Key mapped_key);
 
+  // onKeyswitchEvent is used to listen for Key_HoldKey being released, and any
+  // follow up key releases (up to HOLDKEY_COUNT) that should remain held.
   EventHandlerResult onKeyEvent(KeyEvent &event);
-  EventHandlerResult beforeReportingState(const KeyEvent &event);
   EventHandlerResult afterEachCycle();
 
  private:
-  HoldKeyState state;
-  Key hold_[HOLDKEY_COUNT];
-  KeyAddr special_key_; // only valid after a transition from WAITING to LISTENING.
-  uint32_t fail_start_;
+  KeyEventTracker event_tracker_;
+  HoldKeyState state = WAITING;
+  // only valid during HOLDING and HOLD_FAILED.
+  KeyAddr special_key_ = KeyAddr::none();
+  uint8_t held_ = 0;
+  KeyEvent hold_[HOLDKEY_COUNT];
+
+  uint32_t fail_start_ = 0; // time when
+
+  bool addHeldKey(const KeyEvent &k);
+  void releaseHeldKeys();
 };
 
 }
